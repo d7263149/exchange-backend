@@ -1,27 +1,22 @@
 import express from "express";
 import cors from "cors";
+import http from "http";
 import { CONFIG } from "./config/env";
 
-// 🔥 Force import Redis (ioredis instance)
+// Redis main client
 const redisModule = require("./utils/redis");
-const redis = redisModule.redis; // actual client
-
-// console.log("REDIS TYPE:", redisModule);
-// console.log("REDIS METHODS:", Object.keys(redis));
-// console.log("SERVER STARTED FROM:", __filename);
+const redis = redisModule.redis;
 
 const app = express();
 app.use(express.json());
 
 app.use(
   cors({
-    origin: CONFIG.CLIENT_ORIGIN,
+    origin: CONFIG.CLIENT_ORIGIN || "*",
   })
 );
 
-// ----------------------------------
-// API Routes
-// ----------------------------------
+// Routes
 import orderRoutes from "./routes/order.routes";
 import positionRoutes from "./routes/position.routes";
 app.use("/api", orderRoutes);
@@ -29,30 +24,26 @@ app.use("/api", positionRoutes);
 
 app.get("/", (_req, res) => res.json({ ok: true, message: "Backend working" }));
 
-// ----------------------------------
-// HTTP Server
-// ----------------------------------
-app.listen(CONFIG.PORT, () => {
-  console.log(`🚀 HTTP API running on port ${CONFIG.PORT}`);
-});
+// ----------------------------------------------------
+// Create SINGLE HTTP server (Render exposes only one)
+// ----------------------------------------------------
+const PORT = process.env.PORT || CONFIG.PORT || 4000;
+const server = http.createServer(app);
 
-// ----------------------------------
-// WebSocket — Live Position Stream
-// ----------------------------------
-// ----------------------------------
-// WebSocket — Live Position Stream
-// ----------------------------------
-// ----------------------------------
-// WebSocket — Live Position Stream
-// ----------------------------------
+server.listen(PORT, () =>
+  console.log(`🚀 Server running (API + WS) on port ${PORT}`)
+);
+
+// ----------------------------------------------------
+// WebSocket on same server
+// ----------------------------------------------------
 import WebSocket from "ws";
 import IORedis from "ioredis";
 
-const WS_PORT = 5001;
-const wss = new WebSocket.Server({ port: WS_PORT });
-console.log(`🟢 WebSocket started: ws://localhost:${WS_PORT}`);
+const wss = new WebSocket.Server({ server });
+console.log("🟢 WebSocket bound to same HTTP server");
 
-// ⚠️ Separate Redis client only for XREAD (do NOT reuse main client)
+// Redis stream client for XREAD
 const redisStream = new IORedis(CONFIG.REDIS_URL);
 
 let lastId = "$";
@@ -66,7 +57,6 @@ redisStream.on("error", (err) => {
   console.error("❌ redisStream ERROR:", err.message);
 });
 
-// Loop XREAD forever
 function listenRedis() {
   redisStream.xread(
     "BLOCK",
@@ -82,20 +72,26 @@ function listenRedis() {
 
       if (!res) return listenRedis();
 
-      const stream = res[0];
-      const entries = stream[1];
+      const entries = res[0][1];
 
       for (const [eventId, fields] of entries) {
         lastId = eventId;
-        const data: any = { id: eventId };
+
+        const data: Record<string, string> = { id: eventId };
 
         for (let i = 0; i < fields.length; i += 2) {
-          data[fields[i]] = fields[i + 1];
+          const key = fields[i];
+          const value = fields[i + 1];
+          data[key] = value; // ✔ TypeScript-safe now
         }
 
-        // Broadcast WebSocket update
         const msg = JSON.stringify({ type: "position", data });
-        wss.clients.forEach((c) => c.send(msg));
+
+        wss.clients.forEach((client) => {
+          if (client.readyState === WebSocket.OPEN) {
+            client.send(msg);
+          }
+        });
       }
 
       listenRedis();

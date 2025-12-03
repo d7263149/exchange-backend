@@ -19,6 +19,9 @@ app.use(
 // Routes
 import orderRoutes from "./routes/order.routes";
 import positionRoutes from "./routes/position.routes";
+import markRoutes from "./routes/mark.route";
+app.use("/api", markRoutes);
+
 app.use("/api", orderRoutes);
 app.use("/api", positionRoutes);
 

@@ -7,7 +7,7 @@ router.get("/positions", async (_req, res) => {
   try {
     // FAST & SAFE → read only last 10 entries
     const stream = await redis.xrevrange(
-      "stream:orders",
+      "stream:completed",
       "+",
       "-",
       "COUNT",

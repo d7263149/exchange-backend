@@ -49,7 +49,7 @@ const redisStream = new IORedis(CONFIG.REDIS_URL);
 let lastId = "$";
 
 redisStream.on("connect", () => {
-  console.log("🚀 redisStream connected → listening for live orders...");
+  console.log("🚀 redisStream connected → listening for completed trades...");
   listenRedis();
 });
 
@@ -62,7 +62,7 @@ function listenRedis() {
     "BLOCK",
     0,
     "STREAMS",
-    "stream:orders",
+    "stream:completed",
     lastId,
     (err, res) => {
       if (err) {
@@ -77,7 +77,9 @@ function listenRedis() {
       for (const [eventId, fields] of entries) {
         lastId = eventId;
 
-        const data: Record<string, string> = { id: eventId };
+        // const data: Record<string, string> = { id: eventId };
+        const data: Record<string, any> = { id: eventId };
+
 
         for (let i = 0; i < fields.length; i += 2) {
           const key = fields[i];
@@ -85,7 +87,7 @@ function listenRedis() {
           data[key] = value; // ✔ TypeScript-safe now
         }
 
-        const msg = JSON.stringify({ type: "position", data });
+        const msg = JSON.stringify({ type: "completed_trade", data });
 
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {

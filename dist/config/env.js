@@ -8,7 +8,7 @@ const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 exports.CONFIG = {
     PORT: process.env.PORT || 4000,
-    CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "http://localhost:3000",
+    CLIENT_ORIGIN: process.env.CLIENT_ORIGIN || "*",
     // Redis URL (add this 👇)
     REDIS_URL: process.env.REDIS_URL || "",
     // Binance (we may use later)
